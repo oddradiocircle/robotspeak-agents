@@ -1,0 +1,16 @@
+{
+  "name": "robotspeak-agents",
+  "owner": {
+    "name": "Daniel Gómez (oddradiocircle)"
+  },
+  "metadata": {
+    "description": "Integraciones de RobotSpeak para agentes de IA"
+  },
+  "plugins": [
+    {
+      "name": "robotspeak",
+      "source": "./",
+      "description": "RobotSpeak phrases for Claude Code"
+    }
+  ]
+}

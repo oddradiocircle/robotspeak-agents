@@ -1,0 +1,9 @@
+{
+  "name": "robotspeak",
+  "description": "Plays RobotSpeak phrases so you can hear when Claude Code finishes, fails or needs you",
+  "version": "0.1.0",
+  "author": { "name": "Daniel Gómez (oddradiocircle)" },
+  "homepage": "https://github.com/oddradiocircle/robotspeak-agents",
+  "repository": "https://github.com/oddradiocircle/robotspeak-agents",
+  "license": "MIT"
+}
