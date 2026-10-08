@@ -332,7 +332,13 @@ bash tools/sync-robotspeak.sh ~/code/robotspeak    # actualiza la copia fijada
 Para publicar una versión, añade su sección a `CHANGELOG.md`, ejecuta
 `bash tools/bump-version.sh X.Y.Z`, haz commit y push a `main`. El workflow crea
 el release cuando pasan las pruebas. `bash tools/build-release.sh <carpeta>`
-construye los mismos paquetes en local.
+construye los mismos paquetes en local. Si GitHub Actions no puede correr, publica a mano
+con `gh release create vX.Y.Z --target <commit> --title "RobotSpeak Agents X.Y.Z"
+--notes-file <carpeta>/notes.md <carpeta>/*.tar.gz <carpeta>/*.mcpb <carpeta>/SHA256SUMS`.
+
+`hermes plugins install` revisa todo el repositorio y bloquea la instalación si
+encuentra un hallazgo de severidad alta, incluso en las pruebas. Por ejemplo,
+`rm -rf` sobre una ruta de `$HOME`. Las pruebas usan carpetas temporales propias.
 
 En Windows, `tests/windows-audio.ps1 -WorkDir <carpeta temporal>` comprueba sin
 sonido la enumeración de salidas, las preferencias y las estructuras de WinMM.
