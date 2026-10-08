@@ -3,12 +3,17 @@
 # expected phrase and callsign, and the session must receive the instructions.
 set -u
 repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-export ROBOTSPEAK_MUTE=1 ROBOTSPEAK_DEBUG=1
+export ROBOTSPEAK_MUTE=1 ROBOTSPEAK_DEBUG=1 ROBOTSPEAK_EVENTS=all ROBOTSPEAK_DEVICE=default
+export ROBOTSPEAK_CONFIG=/dev/null/robotspeak-test.json
 unset ROBOTSPEAK_CALLSIGN ROBOTSPEAK_RECEIVED
 failures=0
 check() {
     local expected="$1" json="$2" actual
     actual="$(printf '%s' "$json" | bash "$repo_dir/adapters/claude-code/hook.sh" 2>&1 >/dev/null)"
+    if [[ $? != 0 ]]; then
+        echo "FAIL: hook exited unsuccessfully: $json"
+        failures=$((failures + 1))
+    fi
     if [[ "$actual" != "$expected" ]]; then
         echo "FAIL: $json -> '$actual', expected '$expected'"
         failures=$((failures + 1))

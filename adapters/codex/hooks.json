@@ -1,0 +1,9 @@
+{
+  "hooks": {
+    "SessionStart": [{"hooks": [{"type": "command", "command": "bash \"${PLUGIN_ROOT}/adapters/codex/hook.sh\"", "timeout": 10}]}],
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "bash \"${PLUGIN_ROOT}/adapters/codex/hook.sh\"", "timeout": 10}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "bash \"${PLUGIN_ROOT}/adapters/codex/hook.sh\"", "timeout": 10}]}],
+    "PermissionRequest": [{"hooks": [{"type": "command", "command": "bash \"${PLUGIN_ROOT}/adapters/codex/hook.sh\"", "timeout": 10}]}],
+    "PreToolUse": [{"matcher": "^(request_user_input|request_user_input_async)$", "hooks": [{"type": "command", "command": "bash \"${PLUGIN_ROOT}/adapters/codex/hook.sh\"", "timeout": 10}]}]
+  }
+}

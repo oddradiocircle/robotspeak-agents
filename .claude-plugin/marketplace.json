@@ -10,7 +10,7 @@
     {
       "name": "robotspeak",
       "source": "./",
-      "description": "RobotSpeak phrases for Claude Code"
+      "description": "RobotSpeak phrases for Claude Code and Codex"
     }
   ]
 }

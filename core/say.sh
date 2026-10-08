@@ -15,6 +15,13 @@ case "${1:-}" in
     turn)     word=K   mood=Neutral ;;
     *) exit 0 ;;
 esac
+settings="$(perl "$core_dir/settings.pl" effective)" || exit 1
+{ IFS= read -r events; IFS= read -r device; IFS= read -r volume; IFS= read -r enabled; } <<< "$settings"
+[[ "$enabled" == 1 && "$volume" != 0 ]] || exit 0
+case ",$events," in
+    *",$1,"*) ;;
+    *) exit 0 ;;
+esac
 [[ -n "${ROBOTSPEAK_DEBUG:-}" ]] && echo "$1 $word $mood ${2:-}" >&2
 [[ "${ROBOTSPEAK_MUTE:-0}" == 1 ]] && exit 0
 callsign="${2:-${ROBOTSPEAK_CALLSIGN:-Common}}"
@@ -27,13 +34,18 @@ if [[ -z "${ROBOTSPEAK_ENGINE:-}" ]] && command -v wslpath >/dev/null; then
 fi
 lock="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/robotspeak-agents.lock"
 nohup perl -MFcntl=:flock -e '
-    my ($lock, $max_wait, @command) = @ARGV;
+    my ($lock, $max_wait, $settings_script, $state, @command) = @ARGV;
     my $queued = time;
     open(my $fh, ">>", $lock) or exit 1;
     flock($fh, LOCK_EX) or exit 1;
     exit 0 if time - $queued > $max_wait;
-    exit(system(@command) >> 8);
-' "$lock" "${ROBOTSPEAK_MAX_WAIT:-20}" \
-    bash "$core_dir/../vendor/robotspeak/speak.sh" \
-    -Word "$word" -Mood "$mood" -Callsign "$callsign" -PauseMs 0 \
+    # Recheck after waiting, so off also cancels queued announcements.
+    open(my $prefs, "-|", $^X, $settings_script, "effective") or exit 1;
+    my @prefs = <$prefs>; chomp @prefs;
+    close($prefs) or exit 1;
+    exit 0 unless @prefs == 4 && $prefs[3] eq "1" && $prefs[2] ne "0";
+    exit 0 unless grep { $_ eq $state } split /,/, $prefs[0];
+    exit(system(@command, $prefs[1], $prefs[2]) >> 8);
+' "$lock" "${ROBOTSPEAK_MAX_WAIT:-20}" "$core_dir/settings.pl" "$1" \
+    bash "$core_dir/play.sh" "$word" "$mood" "$callsign" \
     </dev/null >/dev/null 2>&1 &
