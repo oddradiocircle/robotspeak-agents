@@ -16,7 +16,7 @@ case "${1:-}" in
     *) exit 0 ;;
 esac
 settings="$(perl "$core_dir/settings.pl" effective)" || exit 1
-{ IFS= read -r events; IFS= read -r device; IFS= read -r volume; IFS= read -r enabled; } <<< "$settings"
+{ IFS= read -r events; IFS= read -r device; IFS= read -r volume; IFS= read -r enabled; IFS= read -r parts; } <<< "$settings"
 [[ "$enabled" == 1 && "$volume" != 0 ]] || exit 0
 case ",$events," in
     *",$1,"*) ;;
@@ -43,9 +43,9 @@ nohup perl -MFcntl=:flock -e '
     open(my $prefs, "-|", $^X, $settings_script, "effective") or exit 1;
     my @prefs = <$prefs>; chomp @prefs;
     close($prefs) or exit 1;
-    exit 0 unless @prefs == 4 && $prefs[3] eq "1" && $prefs[2] ne "0";
+    exit 0 unless @prefs == 5 && $prefs[3] eq "1" && $prefs[2] ne "0";
     exit 0 unless grep { $_ eq $state } split /,/, $prefs[0];
-    exit(system(@command, $prefs[1], $prefs[2]) >> 8);
+    exit(system(@command, $prefs[1], $prefs[2], $prefs[4]) >> 8);
 ' "$lock" "${ROBOTSPEAK_MAX_WAIT:-20}" "$core_dir/settings.pl" "$1" \
     bash "$core_dir/play.sh" "$word" "$mood" "$callsign" \
     </dev/null >/dev/null 2>&1 &

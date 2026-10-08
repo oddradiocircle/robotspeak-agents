@@ -1,0 +1,7 @@
+# Hermes plugin manifest. The repository root is the plugin, so that
+# `hermes plugins install oddradiocircle/robotspeak-agents` brings the core.
+name: robotspeak
+version: 0.3.0
+description: Plays RobotSpeak phrases so you can hear when Hermes finishes, fails or needs you
+author: Daniel Gómez (oddradiocircle)
+provides_hooks: [pre_llm_call, post_llm_call, on_human_input_request]

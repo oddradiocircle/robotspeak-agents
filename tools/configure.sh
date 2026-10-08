@@ -3,7 +3,7 @@
 set -euo pipefail
 repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 case "${1:-show}" in
-    show|events|volume|on|off)
+    show|events|volume|parts|on|off)
         exec perl "$repo_dir/core/settings.pl" "${@:-show}" ;;
     devices)
         exec perl "$repo_dir/core/audio.pl" list ;;
@@ -36,7 +36,7 @@ case "${1:-show}" in
     test)
         # Bypass the event filter for this explicit listening test, keeping routing.
         settings="$(perl "$repo_dir/core/settings.pl" effective)"
-        { IFS= read -r events; IFS= read -r device; IFS= read -r volume; IFS= read -r enabled; } <<< "$settings"
+        { IFS= read -r events; IFS= read -r device; IFS= read -r volume; IFS= read -r enabled; IFS= read -r parts; } <<< "$settings"
         case "${2:-done}" in
             received) word=RCV mood=Neutral ;;
             done) word=OK mood=Satisfied ;;
@@ -48,6 +48,6 @@ case "${1:-show}" in
             turn) word=K mood=Neutral ;;
             *) echo 'Unknown RobotSpeak state' >&2; exit 1 ;;
         esac
-        exec bash "$repo_dir/core/play.sh" "$word" "$mood" "${ROBOTSPEAK_CALLSIGN:-2}" "$device" "$volume" ;;
-    *) echo 'Usage: configure.sh on|off|volume <0-100>|show|devices|select|device <id>|events <all|none|keys>|test [key]' >&2; exit 1 ;;
+        exec bash "$repo_dir/core/play.sh" "$word" "$mood" "${ROBOTSPEAK_CALLSIGN:-2}" "$device" "$volume" "$parts" ;;
+    *) echo 'Usage: configure.sh on|off|volume <0-100>|parts <all|callsign+word+mood>|show|devices|select|device <id>|events <all|none|keys>|test [key]' >&2; exit 1 ;;
 esac

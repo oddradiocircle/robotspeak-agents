@@ -1,5 +1,7 @@
-name: Tests
+name: Tests and release
 on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
 jobs:
   unix:
     strategy:
@@ -11,12 +13,17 @@ jobs:
       - name: Silent adapter and preferences tests
         shell: bash
         run: |
+          bash tests/versions.sh
           bash tests/marker.sh
           bash tests/settings.sh
           bash tests/volume.sh
           bash tests/queue.sh
+          bash tests/skill.sh
           bash tests/claude-code.sh
           bash tests/codex.sh
+          bash tests/opencode.sh
+          bash tests/hermes.sh
+          bash tests/claude-desktop.sh
       - name: Build CoreAudio component
         if: runner.os == 'macOS'
         run: |
@@ -32,3 +39,28 @@ jobs:
           $work = Join-Path $env:RUNNER_TEMP 'robotspeak-audio-tests'
           New-Item -ItemType Directory -Path $work -Force | Out-Null
           .\tests\windows-audio.ps1 -WorkDir $work
+  # A version without a release is published once every test passes on main.
+  release:
+    needs: [unix, windows]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency: release
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish this version if it has no release yet
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(perl -MJSON::PP -0777 -ne 'print decode_json($_)->{version}' .claude-plugin/plugin.json)"
+          if gh release view "v$version" >/dev/null 2>&1; then
+            echo "v$version is already released; bump the version to publish."
+            exit 0
+          fi
+          out="$RUNNER_TEMP/release"
+          bash tools/build-release.sh "$out"
+          gh release create "v$version" --target "$GITHUB_SHA" --title "RobotSpeak Agents $version" \
+            --notes-file "$out/notes.md" \
+            "$out/robotspeak-agents-$version.tar.gz" "$out/robotspeak-$version.mcpb" "$out/SHA256SUMS"

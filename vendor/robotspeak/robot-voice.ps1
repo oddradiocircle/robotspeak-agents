@@ -1,11 +1,15 @@
 param(
-    [ValidatePattern('^[A-Z]{1,3}$')][ValidateScript({[regex]::IsMatch($_, '^[A-Z]{1,3}$') -and $_ -ne 'R'})][string]$Word = 'OK',
+    # \z, not $: $ also matches before a final newline. -match would ignore case.
+    [ValidateScript({[regex]::IsMatch($_, '^[A-Z]{1,3}\z') -and $_ -ne 'R'})][string]$Word = 'OK',
     [ValidateSet('Ready','Relieved','Neutral','Happy','Enthusiastic','Satisfied','Calm','Sad','Curious','Doubtful','Concerned','Frustrated','Apologetic','Surprised','All')][string]$Mood = 'Ready',
     [ValidateRange(0.5,2.0)][double]$Speed = 1.2,
     [ValidateRange(10,200)][int]$MorseUnitMs = 50,
     [ValidateSet('Classic','Digital','Crystal')][string]$Timbre = 'Digital',
     [ValidateSet('Plain','Melodic','Expressive')][string]$Articulation = 'Plain',
     [ValidateSet('Common','1','2','3','4')][string]$Callsign = 'Common',
+    # Parts that sound, always in this order: Callsign (or ID), Word (or MSG), Mood.
+    # An array, so that PowerShell callers can also write -Parts Word,Mood.
+    [ValidateScript({[regex]::IsMatch($_, '^(?:callsign|id|word|msg|mood)(?:[+,](?:callsign|id|word|msg|mood))*\z', 'IgnoreCase')})][string[]]$Parts = 'Callsign+Word+Mood',
     [ValidateRange(1,5)][int]$Repeat = 1,
     [ValidateRange(0,10000)][int]$PauseMs = 1400,
     [string]$OutFile,
@@ -14,6 +18,11 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if ($OutFile -and $Mood -eq 'All') { throw '-OutFile requires a single -Mood.' }
+# -EndingOnly predates -Parts and keeps meaning Mood alone.
+$partList = if ($EndingOnly) { @('Mood') } else { $Parts -split '[+,]' }
+$withCallsign = $partList -contains 'Callsign' -or $partList -contains 'ID'
+$withWord = $partList -contains 'Word' -or $partList -contains 'MSG'
+$withMood = $partList -contains 'Mood'
 $ProgressPreference = 'SilentlyContinue'
 $profiles = [ordered]@{
     Ready = @{Label='Lista para usar'; Notes=@(
@@ -101,12 +110,14 @@ $morse = @{
 function Play-RobotPhrase([string]$Message, $Ending) {
     $events = [Collections.Generic.List[object]]::new()
     $cursor = 0.0
-    if (-not $EndingOnly) {
+    if ($withCallsign) {
         # Callsign: pip direction (same, up, down) and rhythm (apart or tied); see docs/dictionary.md.
         $pips = @{Common=@(1046.5, 1046.5, 0.14); '1'=@(1046.5, 1567.98, 0.14); '2'=@(1567.98, 1046.5, 0.14); '3'=@(1046.5, 1567.98, 0.07); '4'=@(1567.98, 1046.5, 0.07)}[$Callsign]
         $events.Add(@{Start=0.0; Length=0.06; Frequency=$pips[0]; Gain=.20; Bright=.7; Attack=.006; Release=.018})
         $events.Add(@{Start=$pips[2]; Length=0.06; Frequency=$pips[1]; Gain=.20; Bright=.7; Attack=.006; Release=.018})
         $cursor = 0.42
+    }
+    if ($withWord) {
         # Compensate for the later overall timing scale: effective dot stays in ms.
         $unit = ($MorseUnitMs / 1000.0) * $Speed
         $letterIndex = 0
@@ -136,9 +147,14 @@ function Play-RobotPhrase([string]$Message, $Ending) {
         # Keep a distinct 180 ms boundary before the emotional ending.
         $cursor += (0.18 * $Speed) - (3 * $unit)
     }
-    foreach ($note in $Ending.Notes) {
-        $events.Add(@{Start=$cursor; Frequency=$note[0]; Length=$note[1]; Gain=$note[3]; Bright=$note[4]; Attack=$note[5]; Release=$note[6]})
-        $cursor += $note[1] + $note[2]
+    if ($withMood) {
+        foreach ($note in $Ending.Notes) {
+            $events.Add(@{Start=$cursor; Frequency=$note[0]; Length=$note[1]; Gain=$note[3]; Bright=$note[4]; Attack=$note[5]; Release=$note[6]})
+            $cursor += $note[1] + $note[2]
+        }
+    } else {
+        # Without an ending, the phrase stops right after its last sound.
+        $cursor = ($events | ForEach-Object { $_.Start + $_.Length } | Measure-Object -Maximum).Maximum
     }
     # Change timing only, preserving pitch and each ending's relative rhythm.
     foreach ($event in $events) {
@@ -165,38 +181,53 @@ function Play-RobotPhrase([string]$Message, $Ending) {
     $writer.Write([Text.Encoding]::ASCII.GetBytes('data'))
     $writer.Write([int](2 * $count))
     $samples = [double[]]::new($count)
+    $perSecond = [double]$rate
+    $digital = $Timbre -eq 'Digital'
+    $classic = $Timbre -eq 'Classic'
     foreach ($event in $events) {
         $start = [int][Math]::Floor($event.Start * $rate)
         $length = [int][Math]::Floor($event.Length * $rate)
+        # PowerShell is slow per statement: read each event once and keep the
+        # per-sample arithmetic in its original order, so the PCM is unchanged.
+        $noteLength = $event.Length; $attack = $event.Attack; $release = $event.Release
+        $gain = $event.Gain; $bright = $event.Bright; $shaped = $event.Shaped
+        $angular = 2 * [Math]::PI * $event.Frequency
+        $depth = 1.7 * $bright
         for ($j = 0; $j -lt $length; $j++) {
-            $age = $j / [double]$rate
-            $envelope = [Math]::Min(1.0, $age / $event.Attack) * [Math]::Min(1.0, ($event.Length - $age) / $event.Release)
-            if ($event.Shaped) {
+            $age = $j / $perSecond
+            $rise = $age / $attack
+            if ($rise -gt 1.0) { $rise = 1.0 }
+            $fall = ($noteLength - $age) / $release
+            if ($fall -gt 1.0) { $fall = 1.0 }
+            $envelope = $rise * $fall
+            if ($shaped) {
                 # A small plucked accent settles to a sustain, without shortening the mark.
                 $envelope *= .72 + .28 * [Math]::Exp(-$age / .025)
             }
-            $phase = 2 * [Math]::PI * $event.Frequency * $age
-            switch ($Timbre) {
-                'Classic' {
-                    $voice = [Math]::Sin($phase) + $event.Bright * (0.22 * [Math]::Sin(2 * $phase) + 0.08 * [Math]::Sin(3 * $phase))
-                }
-                'Digital' {
-                    # FM creates a bright electronic attack that softens during each note.
-                    $modulation = 1.7 * $event.Bright * [Math]::Exp(-$age / 0.12)
-                    $voice = 0.82 * [Math]::Sin($phase + $modulation * [Math]::Sin(2 * $phase)) + 0.18 * [Math]::Sin(1.004 * $phase)
-                }
-                'Crystal' {
-                    # Slightly inharmonic partials give a compact bell/computer chime.
-                    $voice = 0.82 * [Math]::Sin($phase) + $event.Bright * (0.36 * [Math]::Sin(2.01 * $phase) * [Math]::Exp(-10 * $age) + 0.20 * [Math]::Sin(3.98 * $phase) * [Math]::Exp(-18 * $age))
-                }
+            $phase = $angular * $age
+            if ($digital) {
+                # FM creates a bright electronic attack that softens during each note.
+                $modulation = $depth * [Math]::Exp(-$age / 0.12)
+                $voice = 0.82 * [Math]::Sin($phase + $modulation * [Math]::Sin(2 * $phase)) + 0.18 * [Math]::Sin(1.004 * $phase)
+            } elseif ($classic) {
+                $voice = [Math]::Sin($phase) + $bright * (0.22 * [Math]::Sin(2 * $phase) + 0.08 * [Math]::Sin(3 * $phase))
+            } else {
+                # Slightly inharmonic partials give a compact bell/computer chime.
+                $voice = 0.82 * [Math]::Sin($phase) + $bright * (0.36 * [Math]::Sin(2.01 * $phase) * [Math]::Exp(-10 * $age) + 0.20 * [Math]::Sin(3.98 * $phase) * [Math]::Exp(-18 * $age))
             }
-            $samples[$start + $j] += $event.Gain * $envelope * $voice
+            $samples[$start + $j] += $gain * $envelope * $voice
         }
     }
-    foreach ($sample in $samples) {
-        if ([Math]::Abs($sample) -gt 0.99) { throw 'Clipped synthesized sample.' }
-        $writer.Write([int16]($sample * 32767))
+    $pcm = [int16[]]::new($count)
+    for ($j = 0; $j -lt $count; $j++) {
+        $sample = $samples[$j]
+        if ($sample -gt 0.99 -or $sample -lt -0.99) { throw 'Clipped synthesized sample.' }
+        $pcm[$j] = [int16]($sample * 32767)
     }
+    # One write instead of one per sample; x86 and ARM Windows are little-endian, like WAV.
+    $bytes = [byte[]]::new(2 * $count)
+    [Buffer]::BlockCopy($pcm, 0, $bytes, 0, $bytes.Length)
+    $writer.Write($bytes)
     $writer.Flush()
     $stream.Position = 0
     if ($OutFile) {
@@ -209,12 +240,15 @@ function Play-RobotPhrase([string]$Message, $Ending) {
         if (-not $ValidateOnly -and -not $OutFile) { $player.PlaySync() }
     } finally { $player.Dispose(); $writer.Dispose(); $stream.Dispose() }
 }
+$played = $false
 foreach ($key in $profiles.Keys) {
     if ($Mood -ne 'All' -and $key -ne $Mood) { continue }
     $selected = $profiles[$key]
     foreach ($take in 1..$Repeat) {
+        # The pause separates samples; none follows the last one.
+        if ($played -and -not $ValidateOnly -and -not $OutFile) { Start-Sleep -Milliseconds $PauseMs }
+        $played = $true
         Write-Output ($Word + ': ' + $selected.Label + ' (' + $take + '/' + $Repeat + ')')
         Play-RobotPhrase $Word $selected
-        if (-not $ValidateOnly -and -not $OutFile) { Start-Sleep -Milliseconds $PauseMs }
     }
 }

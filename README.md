@@ -8,10 +8,32 @@ El lenguaje (palabras, cierres, frases, marca escrita e indicativos) se define e
 | --- | --- | --- |
 | Claude Code | Plugin con hooks | 1 (do–sol, separados) |
 | Codex | Plugin con adaptador propio; hooks requieren aprobación | 2 (sol–do, separados) |
-| opencode | Pendiente | 3 |
-| Hermes | Pendiente | 4 |
+| opencode | Plugin; probado con opencode 1.17.11 | 3 |
+| Hermes | Plugin; validado con Hermes 0.21.4 | 4 |
+| Claude Desktop y Cowork | Experimental: servidor MCP; suena solo si Claude llama la herramienta | 1 |
 
 Los indicativos son provisionales hasta escucharlos juntos.
+
+## Instalación rápida
+
+| Agente | Comando |
+| --- | --- |
+| Claude Code | `/plugin marketplace add oddradiocircle/robotspeak-agents` y `/plugin install robotspeak@robotspeak-agents` |
+| Codex | `codex plugin marketplace add oddradiocircle/robotspeak-agents` y `codex plugin add robotspeak@robotspeak-agents` |
+| opencode | Ver [opencode](#opencode) |
+| Hermes | `hermes plugins install oddradiocircle/robotspeak-agents --enable` |
+| Claude Desktop y Cowork | Abre `robotspeak-<versión>.mcpb` del [último release](https://github.com/oddradiocircle/robotspeak-agents/releases/latest) |
+
+La habilidad `robotspeak` controla el sonido desde cualquier agente y explica
+cómo instalar la integración que falte. Los plugins de Claude Code y Codex ya la
+incluyen. Para opencode, Hermes u otros agentes compatibles con
+[skills.sh](https://skills.sh):
+
+```bash
+npx skills add oddradiocircle/robotspeak-agents -s robotspeak -g -a opencode hermes-agent
+```
+
+La habilidad sola no produce sonido: necesita la integración del agente.
 
 ## Cómo funciona
 
@@ -82,26 +104,119 @@ mensaje puede declarar un resultado.
 Referencias: [hooks y sus contratos](https://learn.chatgpt.com/docs/hooks),
 [manifiestos y hooks de plugins](https://developers.openai.com/plugins/build/plugins).
 
+## opencode
+
+Un plugin de opencode en [`adapters/opencode/robotspeak.js`](adapters/opencode/robotspeak.js).
+opencode carga los archivos de `~/.config/opencode/plugins/`, y el plugin necesita
+el resto del repositorio a su lado. Para instalarlo:
+
+```bash
+git clone https://github.com/oddradiocircle/robotspeak-agents ~/.local/share/robotspeak-agents
+mkdir -p ~/.config/opencode/plugins
+ln -s ~/.local/share/robotspeak-agents/adapters/opencode/robotspeak.js ~/.config/opencode/plugins/robotspeak.js
+```
+
+Para actualizarlo, `git -C ~/.local/share/robotspeak-agents pull`. El plugin añade
+las instrucciones de la marca a `instructions`, sin tocar `opencode.json`.
+
+| Evento | Frase |
+| --- | --- |
+| `chat.message` de la sesión principal | `received` (se silencia con `ROBOTSPEAK_RECEIVED=0`) |
+| `session.idle` tras un encargo | La marca de la última línea; sin marca válida, `turn` |
+| `session.error` y después `session.idle` | `blocked`; si la persona detuvo el turno, nada |
+| `permission.asked` | `approval`, también si lo pide un subagente |
+| `question.asked` | `question` |
+
+Las sesiones hijas (subagentes) no anuncian `received` ni el final del turno.
+Con opencode 1.17.11 se comprobó que el plugin carga y añade las instrucciones,
+y en una sesión real sonaron `received` y `blocked` (el proveedor no tenía saldo).
+El final con marca está cubierto por las pruebas sin sonido; falta oírlo en una
+sesión completa.
+
+## Hermes
+
+La raíz del repositorio es un plugin de Hermes ([`plugin.yaml`](plugin.yaml) y
+[`__init__.py`](__init__.py), que carga [`adapters/hermes/plugin.py`](adapters/hermes/plugin.py)).
+Así `hermes plugins install` trae también el núcleo y los motores:
+
+```bash
+hermes plugins install oddradiocircle/robotspeak-agents --enable
+hermes plugins update robotspeak        # para actualizarlo
+```
+
+En otro perfil, añade `-p <perfil>`. Las instrucciones de la marca entran en el
+prompt de sistema de cada sesión nueva; las sesiones reanudadas conservan su prompt.
+
+| Hook | Frase |
+| --- | --- |
+| `pre_llm_call` | `received` (se silencia con `ROBOTSPEAK_RECEIVED=0`) |
+| `post_llm_call` | La marca de la última línea; sin marca válida, `turn` |
+| `on_human_input_request` de tipo `approval` | `approval` |
+| `on_human_input_request` de tipo `clarify` | `question` |
+
+Solo suenan las sesiones locales: `cli`, `tui` y `desktop`. Las respuestas que
+Hermes envía por Telegram, Slack u otra pasarela no suenan en el computador ni
+reciben la regla de la marca. `ROBOTSPEAK_HERMES_PLATFORMS` cambia la lista
+(`all` para todas). Los subagentes no suenan. Un turno interrumpido no suena,
+porque Hermes no llama `post_llm_call`. `hermes plugins validate` y
+`hermes plugins doctor` aceptan el plugin con Hermes 0.21.4.
+
+## Claude Desktop y Cowork
+
+El chat de Claude Desktop y Cowork no ejecutan hooks en el computador. Por eso
+la integración es un servidor MCP local: [`adapters/claude-desktop/server.js`](adapters/claude-desktop/server.js),
+empaquetado como `robotspeak-<versión>.mcpb` en cada release. Ábrelo con Claude
+Desktop o instálalo desde Ajustes > Extensiones. Usa el Node.js que trae Claude
+Desktop.
+
+El servidor ofrece la herramienta `robotspeak_say` y le pide a Claude llamarla al
+final de cada respuesta con su estado (`done`, `review`, `question`, `failed`,
+`blocked` o `turn`). **El sonido depende de que Claude la llame**: no hay un evento
+que lo garantice, y `received` y `approval` no suenan. Claude Desktop puede pedir
+permiso para usar la herramienta; elige permitirla siempre para no interrumpir.
+
+- En macOS y Linux usa el mismo núcleo que los demás agentes.
+- En Windows usa `tools/configure.ps1 -Say`, con preferencias en
+  `%APPDATA%/robotspeak-agents/config.json`. La frase tarda varios segundos en
+  sonar, porque Windows PowerShell sintetiza más lento que Perl.
+- Cowork: por confirmar. Según la documentación de Anthropic, Cowork usa los
+  servidores MCP locales de Claude Desktop cuando la app está abierta, pero sus
+  hooks corren en una máquina virtual o en la nube, sin acceso al audio local.
+- La pestaña Code de Claude Desktop usa el plugin de Claude Code en sesiones
+  locales. En Windows nativo esos hooks no están soportados todavía.
+
+## Releases
+
+Cada versión nueva en `main` publica un release de GitHub cuando pasan todas las
+pruebas. El release incluye:
+
+- `robotspeak-<versión>.mcpb`: Claude Desktop y Cowork.
+- `robotspeak-agents-<versión>.tar.gz`: el repositorio completo, para instalar a mano.
+- `SHA256SUMS`: sumas para verificar las descargas.
+
+Claude Code, Codex y Hermes se instalan y actualizan desde el repositorio.
+
 ## Plataformas
 
-Usa los motores de RobotSpeak, fijados en [`vendor/robotspeak`](vendor/robotspeak/robotspeak-source.json): Perl en macOS y Linux. En WSL se prefiere Perl si Linux tiene reproductor (`paplay`, `pw-play` o `aplay`), porque sintetiza en unos 0,25 s frente a unos 4,5 s de PowerShell; sin reproductor Linux, usa Windows PowerShell. Los adaptadores de Claude Code y Codex nativos en Windows no están soportados todavía. La reproducción en macOS no se ha probado en un Mac.
+Usa los motores de RobotSpeak, fijados en [`vendor/robotspeak`](vendor/robotspeak/robotspeak-source.json): Perl en macOS y Linux. En WSL se prefiere Perl si Linux tiene reproductor (`paplay`, `pw-play` o `aplay`), porque sintetiza en unos 0,25 s frente a unos 4,5 s de PowerShell; sin reproductor Linux, usa Windows PowerShell. Los adaptadores con hooks (Claude Code, Codex, opencode y Hermes) en Windows nativo no están soportados todavía; el servidor MCP de Claude Desktop usa Windows PowerShell. La reproducción en macOS no se ha probado en un Mac.
 
 ## Configuración
 
-La salida, el volumen, el interruptor de sonido y los estados audibles son
-compartidos por Claude Code y Codex. Se leen en cada aviso; cambiar estas preferencias no requiere cambiar
-los hooks ni las instrucciones del agente.
+La salida, el volumen, el interruptor de sonido, los estados audibles y las
+partes que suenan son compartidos por todos los agentes del mismo entorno. Se
+leen en cada aviso; cambiar estas preferencias no requiere cambiar los hooks ni
+las instrucciones del agente.
 
-Dentro de Claude Code, usa `/robotspeak:control off`, `/robotspeak:control on`
-o `/robotspeak:control volume 50`. En Codex, invoca la habilidad con
-`$robotspeak:control off`, `$robotspeak:control on` o `$robotspeak:control volume 50`.
-Tras actualizar el plugin, recarga sus habilidades o abre una sesión nueva para
-que aparezca el control.
+Dentro de Claude Code, usa `/robotspeak:robotspeak off`, `/robotspeak:robotspeak on`
+o `/robotspeak:robotspeak volume 50`. En Codex, invoca la habilidad con
+`$robotspeak:robotspeak off`, `$robotspeak:robotspeak on` o `$robotspeak:robotspeak volume 50`.
+También basta con pedirlo: «apaga RobotSpeak». Tras actualizar el plugin, recarga
+sus habilidades o abre una sesión nueva para que aparezca el control.
 
 En macOS, Linux y WSL:
 
 ```bash
-bash tools/configure.sh off             # apaga los avisos de ambos agentes
+bash tools/configure.sh off             # apaga los avisos de todos los agentes
 bash tools/configure.sh on              # vuelve a encenderlos
 bash tools/configure.sh volume 50       # volumen propio de RobotSpeak; 50 % por defecto
 bash tools/configure.sh select          # muestra salidas y permite elegir por número
@@ -110,7 +225,17 @@ bash tools/configure.sh test done       # prueba la salida elegida, aunque done 
 bash tools/configure.sh events review,question,approval,blocked
 bash tools/configure.sh events all      # restaura todos los estados
 bash tools/configure.sh device default  # vuelve a seguir la salida del sistema
+bash tools/configure.sh parts word+mood # sin indicativo: mensaje y cierre
+bash tools/configure.sh parts mood      # solo el cierre musical
+bash tools/configure.sh parts all       # indicativo, mensaje y cierre
 ```
+
+Las partes son `callsign` (el indicativo, quién habla; alias `id`), `word` (el
+mensaje en Morse; alias `msg`) y `mood` (el cierre, cómo salió). Se unen con `+`
+y siempre suenan en ese orden. Quitar partes acorta el aviso, pero borra
+diferencias: sin indicativo no sabes qué agente habla, y sin mensaje `approval`
+suena igual que `blocked`. El [diccionario](https://github.com/oddradiocircle/robotspeak/blob/main/docs/dictionary.md#partes-audibles)
+muestra qué frases se confunden con cada combinación.
 
 En Windows PowerShell:
 
@@ -123,6 +248,8 @@ En Windows PowerShell:
 .\tools\configure.ps1 -Events review,question,approval,blocked
 .\tools\configure.ps1 -Events all
 .\tools\configure.ps1 -Device default
+.\tools\configure.ps1 -Parts word+mood
+.\tools\configure.ps1 -Say done      # anuncio normal: respeta el interruptor y los estados
 ```
 
 La selección afecta solo a RobotSpeak. No cambia la salida predeterminada ni el
@@ -143,7 +270,7 @@ Las preferencias se guardan en `$XDG_CONFIG_HOME/robotspeak-agents/config.json`,
 o `~/.config/robotspeak-agents/config.json` si esa variable no existe. La herramienta
 de PowerShell nativo usa `%APPDATA%/robotspeak-agents/config.json`. `ROBOTSPEAK_CONFIG`
 permite elegir otro archivo. Los entornos Windows y WSL tienen rutas de preferencias
-distintas por defecto; Claude Code y Codex ejecutados en el mismo entorno comparten
+distintas por defecto; los agentes ejecutados en el mismo entorno comparten
 el archivo. No se guardan preferencias en la carpeta del plugin, para conservarlas
 al actualizarlo.
 
@@ -166,7 +293,7 @@ en el hardware correspondiente.
 
 Variables de entorno; en Claude Code pueden ir en la sección `env` de `settings.json`.
 En Codex, expórtalas antes de iniciar el proceso.
-Las variables `ROBOTSPEAK_EVENTS`, `ROBOTSPEAK_DEVICE` y `ROBOTSPEAK_VOLUME` tienen prioridad sobre el
+Las variables `ROBOTSPEAK_EVENTS`, `ROBOTSPEAK_DEVICE`, `ROBOTSPEAK_VOLUME` y `ROBOTSPEAK_PARTS` tienen prioridad sobre el
 archivo de preferencias. `ROBOTSPEAK_RECEIVED=0` y `ROBOTSPEAK_MUTE=1` siguen teniendo
 efecto aunque el estado figure en la lista de eventos habilitados.
 
@@ -180,6 +307,9 @@ efecto aunque el estado figure en la lista de eventos habilitados.
 | `ROBOTSPEAK_EVENTS` | Preferencias; todos si no hay archivo | Lista separada por comas, `all` o `none` |
 | `ROBOTSPEAK_DEVICE` | Preferencias; `default` si no hay archivo | `default` o un identificador de `devices` |
 | `ROBOTSPEAK_VOLUME` | Preferencias; `50` si no está guardado | Volumen propio, entero entre `0` y `100` |
+| `ROBOTSPEAK_PARTS` | Preferencias; `callsign+word+mood` | Partes que suenan, unidas con `+` |
+| `ROBOTSPEAK_HERMES_PLATFORMS` | `cli,tui,desktop` | Plataformas de Hermes que suenan, o `all` |
+| `ROBOTSPEAK_AGENTS_DIR` | Búsqueda automática | Instalación que usa la habilidad cuando se instaló sola |
 | `ROBOTSPEAK_CONFIG` | Ruta de preferencias del sistema | Archivo JSON compartido por los adaptadores |
 
 ## Desarrollo
@@ -191,8 +321,18 @@ bash tests/marker.sh                               # parser, sin sonido
 bash tests/settings.sh                             # preferencias y enrutamiento, sin sonido
 bash tests/volume.sh                               # amplitud y conservación del PCM, sin sonido
 bash tests/queue.sh                                # apagar cancela los avisos en espera, sin sonido
+bash tests/opencode.sh                             # plugin de opencode con cliente falso, sin sonido
+bash tests/hermes.sh                               # plugin de Hermes con contexto falso, sin sonido
+bash tests/claude-desktop.sh                       # servidor MCP por stdio, sin sonido
+bash tests/skill.sh                                # habilidad instalada sola, sin sonido
+bash tests/versions.sh                             # misma versión en todos los manifiestos
 bash tools/sync-robotspeak.sh ~/code/robotspeak    # actualiza la copia fijada
 ```
+
+Para publicar una versión, añade su sección a `CHANGELOG.md`, ejecuta
+`bash tools/bump-version.sh X.Y.Z`, haz commit y push a `main`. El workflow crea
+el release cuando pasan las pruebas. `bash tools/build-release.sh <carpeta>`
+construye los mismos paquetes en local.
 
 En Windows, `tests/windows-audio.ps1 -WorkDir <carpeta temporal>` comprueba sin
 sonido la enumeración de salidas, las preferencias y las estructuras de WinMM.

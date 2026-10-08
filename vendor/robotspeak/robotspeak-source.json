@@ -1,9 +1,9 @@
 {
   "repository": "https://github.com/oddradiocircle/robotspeak",
-  "commit": "9784aff052141422882cfdc21c4c8077da8f994d",
+  "commit": "b28a7b4c7d6c8d179235e2bfe7756d4b2bdea934",
   "files": [
-    {"path": "scripts/robot-voice.ps1", "sha256": "336f8aaca932f8eaff1db678ca4ccfa035d37eaec42a01498fad6fa223aa8dbf"},
-    {"path": "scripts/robot-voice.pl", "sha256": "e8b129bf36a562f607ed867b7d26ac9d8b8ab0bb8e89ad45c3a877b9cb9dee49"},
-    {"path": "scripts/speak.sh", "sha256": "9e5ef14c94b0e9bc34980ef5290e9f0d8051fbdebd17f5548b5a6c631ee54023"}
+    {"path": "scripts/robot-voice.ps1", "sha256": "5eb5034edd4feb3a104ab367305bc586cbaa3df6f3acb3aa9247c6f0d0dcf4dc"},
+    {"path": "scripts/robot-voice.pl", "sha256": "abe46396d54f7af845922dd11d8d998e43fdaa06131120ae35fc21296e79e43e"},
+    {"path": "scripts/speak.sh", "sha256": "18fe5b142ae9853264638f0c7298857cd81de9c6f5d75d8e45df020a2f0b77c1"}
   ]
 }

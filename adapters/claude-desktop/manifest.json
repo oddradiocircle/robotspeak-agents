@@ -1,0 +1,37 @@
+{
+  "manifest_version": "0.3",
+  "name": "robotspeak",
+  "display_name": "RobotSpeak",
+  "version": "0.3.0",
+  "description": "Plays RobotSpeak phrases so you can hear when Claude finishes, fails or needs you",
+  "long_description": "Claude calls the robotspeak_say tool at the end of each reply, and RobotSpeak plays the phrase for that state on this computer. Desktop chat and Cowork have no hooks, so the sound depends on Claude calling the tool. Preferences (on/off, volume, output, audible states and parts) are shared with the RobotSpeak plugins for Claude Code and Codex.",
+  "author": { "name": "Daniel Gómez (oddradiocircle)" },
+  "homepage": "https://github.com/oddradiocircle/robotspeak-agents",
+  "repository": { "type": "git", "url": "https://github.com/oddradiocircle/robotspeak-agents" },
+  "license": "MIT",
+  "server": {
+    "type": "node",
+    "entry_point": "adapters/claude-desktop/server.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/adapters/claude-desktop/server.js"],
+      "env": { "ROBOTSPEAK_CALLSIGN": "${user_config.callsign}" }
+    }
+  },
+  "tools": [
+    { "name": "robotspeak_say", "description": "Plays the RobotSpeak phrase for the state a reply ends in" }
+  ],
+  "user_config": {
+    "callsign": {
+      "type": "string",
+      "title": "Callsign",
+      "description": "Pips that say who speaks: 1 (Claude), 2, 3, 4 or Common",
+      "default": "1",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": { "node": ">=18.0.0" }
+  }
+}

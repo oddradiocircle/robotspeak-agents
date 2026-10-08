@@ -7,7 +7,7 @@ trap 'rm -rf "$work"' EXIT
 mkdir "$work/bin" "$work/runtime"
 export ROBOTSPEAK_CONFIG="$work/config.json" XDG_RUNTIME_DIR="$work/runtime"
 export ROBOTSPEAK_ENGINE=perl ROBOTSPEAK_MUTE=0 RS_PLAYFILE="$work/played.wav"
-unset ROBOTSPEAK_DEVICE ROBOTSPEAK_VOLUME ROBOTSPEAK_EVENTS ROBOTSPEAK_DEBUG
+unset ROBOTSPEAK_DEVICE ROBOTSPEAK_VOLUME ROBOTSPEAK_EVENTS ROBOTSPEAK_DEBUG ROBOTSPEAK_PARTS
 cat > "$work/bin/paplay" <<'PLAYER'
 #!/usr/bin/env bash
 cp "${@: -1}" "$RS_PLAYFILE"
@@ -53,4 +53,13 @@ perl "$repo_dir/core/settings.pl" on >/dev/null
     wait "$!"
 )
 [[ -s "$RS_PLAYFILE" ]] || { echo 'On did not restore playback'; exit 1; }
+# The saved parts reach the engine: the ending alone is a shorter phrase.
+full="$(wc -c < "$RS_PLAYFILE")"
+perl "$repo_dir/core/settings.pl" parts mood >/dev/null
+(
+    set -- done 2
+    source "$repo_dir/core/say.sh"
+    wait "$!"
+)
+((full > $(wc -c < "$RS_PLAYFILE"))) || { echo 'Parts did not reach the engine'; exit 1; }
 echo 'Queue and shared switch: all checks passed'

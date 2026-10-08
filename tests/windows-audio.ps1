@@ -37,9 +37,39 @@ try {
     if ($saved.enabled -ne $false -or $saved.volume -ne 50 -or ($saved.events -join ',') -ne 'review,question') { throw 'Off did not preserve preferences.' }
     & $configure -On | Out-Null
     if ([IO.File]::ReadAllText($env:ROBOTSPEAK_CONFIG) -ne $before) { throw 'On did not restore saved preferences.' }
+    if ($saved.parts -ne 'callsign+word+mood') { throw 'Missing default parts.' }
+    & $configure -Parts MSG,MOOD | Out-Null
+    $saved = [IO.File]::ReadAllText($env:ROBOTSPEAK_CONFIG) | ConvertFrom-Json
+    if ($saved.parts -ne 'word+mood') { throw 'Parts not normalized.' }
+    & $configure -Parts 'Mood+ID' | Out-Null
+    $saved = [IO.File]::ReadAllText($env:ROBOTSPEAK_CONFIG) | ConvertFrom-Json
+    if ($saved.parts -ne 'callsign+mood') { throw 'Parts order not canonical.' }
+    $before = [IO.File]::ReadAllText($env:ROBOTSPEAK_CONFIG)
+    foreach ($bad in @('', 'voice', 'word+', 'word mood')) {
+        $rejected = $false
+        try { & $configure -Parts $bad | Out-Null } catch { $rejected = $true }
+        if (-not $rejected -or [IO.File]::ReadAllText($env:ROBOTSPEAK_CONFIG) -ne $before) { throw "Invalid parts accepted: '$bad'" }
+    }
+    & $configure -Parts all | Out-Null
     & $configure -Events none | Out-Null
     $saved = [IO.File]::ReadAllText($env:ROBOTSPEAK_CONFIG) | ConvertFrom-Json
     if ($saved.events.Count -ne 0) { throw 'Cannot silence all events.' }
+    # -Say honors the switch and the audible states; muted here, so it only reports.
+    $env:ROBOTSPEAK_DEBUG = '1'; $env:ROBOTSPEAK_MUTE = '1'
+    try {
+        if (& $configure -Say done) { throw 'Silenced state announced.' }
+        & $configure -Events all | Out-Null
+        if ((& $configure -Say done) -ne 'done OK Satisfied 2') { throw 'Audible state not announced.' }
+        $env:ROBOTSPEAK_CALLSIGN = '1'
+        if ((& $configure -Say question) -ne 'question K Curious 1') { throw 'Callsign not honored.' }
+        & $configure -Off | Out-Null
+        if (& $configure -Say done) { throw 'Off did not silence -Say.' }
+        if ((& $configure -Test done) -ne 'done OK Satisfied 1') { throw '-Test must play while off.' }
+        & $configure -On | Out-Null
+        $rejected = $false
+        try { & $configure -Say bogus | Out-Null } catch { $rejected = $true }
+        if (-not $rejected) { throw 'Unknown state accepted.' }
+    } finally { Remove-Item Env:ROBOTSPEAK_DEBUG, Env:ROBOTSPEAK_MUTE, Env:ROBOTSPEAK_CALLSIGN -ErrorAction SilentlyContinue }
     $headerType = [RobotSpeakAudio].GetNestedType('Header', [Reflection.BindingFlags]::NonPublic)
     $formatType = [RobotSpeakAudio].GetNestedType('Format', [Reflection.BindingFlags]::NonPublic)
     $expectedHeader = if ([IntPtr]::Size -eq 8) { 48 } else { 32 }
