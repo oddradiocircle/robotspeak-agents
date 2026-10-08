@@ -337,8 +337,11 @@ con `gh release create vX.Y.Z --target <commit> --title "RobotSpeak Agents X.Y.Z
 --notes-file <carpeta>/notes.md <carpeta>/*.tar.gz <carpeta>/*.mcpb <carpeta>/SHA256SUMS`.
 
 `hermes plugins install` revisa todo el repositorio y bloquea la instalación si
-encuentra un hallazgo de severidad alta, incluso en las pruebas. Por ejemplo,
-`rm -rf` sobre una ruta de `$HOME`. Las pruebas usan carpetas temporales propias.
+encuentra un hallazgo de severidad alta, incluso en las pruebas o en este texto.
+Por ejemplo, un borrado recursivo de una carpeta del usuario. Las pruebas solo
+borran sus carpetas temporales. Antes de publicar, `bash tools/hermes-scan.sh`
+corre ese escáner sobre los archivos del repositorio y falla si Hermes no instalaría
+el plugin sin preguntar. Necesita Hermes instalado; `HERMES_AGENT_DIR` indica dónde.
 
 En Windows, `tests/windows-audio.ps1 -WorkDir <carpeta temporal>` comprueba sin
 sonido la enumeración de salidas, las preferencias y las estructuras de WinMM.
