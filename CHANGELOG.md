@@ -17,6 +17,8 @@ con estas notas y los paquetes instalables.
 - Motores de RobotSpeak actualizados a b28a7b4: síntesis más rápida con el
   mismo PCM, `-Parts` y Perl por defecto en WSL cuando hay reproductor Linux.
 - Releases automáticos con paquetes instalables y sumas SHA-256.
+- `tools/hermes-scan.sh` corre el escáner de instalación de Hermes sobre el
+  repositorio antes de publicar.
 
 ## 0.2.0 (2026-10-08)
 
