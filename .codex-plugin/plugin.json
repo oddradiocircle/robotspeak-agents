@@ -1,7 +1,7 @@
 {
   "name": "robotspeak",
   "description": "RobotSpeak status sounds for Codex",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "hooks": "./adapters/codex/hooks.json",
   "skills": "./skills/"
 }

@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "robotspeak",
   "display_name": "RobotSpeak",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Plays RobotSpeak phrases so you can hear when Claude finishes, fails or needs you",
   "long_description": "Claude calls the robotspeak_say tool at the end of each reply, and RobotSpeak plays the phrase for that state on this computer. Desktop chat and Cowork have no hooks, so the sound depends on Claude calling the tool. Preferences (on/off, volume, output, audible states and parts) are shared with the RobotSpeak plugins for Claude Code and Codex.",
   "author": { "name": "Daniel Gómez (oddradiocircle)" },

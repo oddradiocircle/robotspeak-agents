@@ -4,6 +4,13 @@ Cada versión publicada tiene su sección aquí. Al subir la versión con
 `tools/bump-version.sh`, la integración continua crea el release de GitHub
 con estas notas y los paquetes instalables.
 
+## 0.3.1 (2026-10-08)
+
+- Las pruebas pasan también en macOS: la prueba de opencode resuelve la carpeta
+  temporal, que en macOS es un enlace a `/private/var`. El plugin no cambia.
+- Primera versión publicada por la integración continua tras probarse en Linux,
+  macOS y Windows.
+
 ## 0.3.0 (2026-10-08)
 
 - Nuevos agentes: opencode (indicativo 3), Hermes (indicativo 4) y, en fase
