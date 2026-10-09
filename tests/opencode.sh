@@ -2,7 +2,8 @@
 # opencode adapter with a fake client and a recording say.sh. No audio.
 set -euo pipefail
 repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-work="$(mktemp -d)"
+# Resolve links, as the plugin does: macOS keeps temp folders under a linked /var.
+work="$(cd -- "$(mktemp -d)" && pwd -P)"
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/tree/adapters/opencode" "$work/tree/core" "$work/plugins"
 cp "$repo_dir/adapters/opencode/robotspeak.js" "$work/tree/adapters/opencode/"
